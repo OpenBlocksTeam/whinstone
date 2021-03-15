@@ -1,2 +1,2 @@
-# simple-parser
-Simple and easy parser module for OpenBlocks
+# OpenParsh
+An open-source efficient parser openblocks module.
