@@ -11,8 +11,13 @@ import com.openblocks.moduleinterface.projectfiles.OpenBlocksCode;
 import com.openblocks.moduleinterface.projectfiles.OpenBlocksLayout;
 
 import java.lang.ref.WeakReference;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 
+/**
+ * OpenParsh is meant to be an efficient parser where it converts both code and layout into
+ * a byte-level format, where it will save some storage space
+ */
 public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
     WeakReference<Context> context;
@@ -37,9 +42,25 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
     }
 
+    /* To generate a unique ID, we're just going to use a random generator that generates a random
+     * identifier fixed at 16 characters, which can hold about 65536 projects */
     @Override
     public String generateFreeId(ArrayList<String> existing_ids) {
-        return null;
+        String result;
+
+        do {
+            final String AB = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+            SecureRandom rnd = new SecureRandom();
+
+            StringBuilder sb = new StringBuilder(16);
+            for (int i = 0; i < 16; i++)
+                sb.append(AB.charAt(rnd.nextInt(AB.length())));
+
+            result = sb.toString();
+
+        } while (!existing_ids.contains(result));
+
+        return result;
     }
 
     @Override
