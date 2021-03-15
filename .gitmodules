@@ -1,0 +1,3 @@
+[submodule "module-interface"]
+	path = module-interface
+	url = https://github.com/OpenBlocksTeam/openblocks-module-interface
