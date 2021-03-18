@@ -1,7 +1,6 @@
 package com.openblocks.module.parsh;
 
 import android.content.Context;
-import android.graphics.Path;
 import android.util.Pair;
 
 import com.openblocks.moduleinterface.OpenBlocksModule;
@@ -9,6 +8,7 @@ import com.openblocks.moduleinterface.models.OpenBlocksFile;
 import com.openblocks.moduleinterface.models.OpenBlocksProjectMetadata;
 import com.openblocks.moduleinterface.models.OpenBlocksRawProject;
 import com.openblocks.moduleinterface.models.config.OpenBlocksConfig;
+import com.openblocks.moduleinterface.models.layout.LayoutViewXMLAttribute;
 import com.openblocks.moduleinterface.projectfiles.OpenBlocksCode;
 import com.openblocks.moduleinterface.projectfiles.OpenBlocksLayout;
 
@@ -175,11 +175,9 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
 
         // =========================================================================================
-        ByteBuffer layout_buff = ByteBuffer.wrap(new byte[10]);
+        String layout_serialized = serializeLayout(layout);
 
-        // TODO: 3/15/21 this too
-
-        rawProject.files.add(new OpenBlocksFile(layout_buff.array(), "layout"));
+        rawProject.files.add(new OpenBlocksFile(layout_serialized.getBytes(), "layout"));
         // =========================================================================================
 
         return rawProject;
