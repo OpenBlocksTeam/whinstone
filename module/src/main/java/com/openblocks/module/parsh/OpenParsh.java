@@ -7,6 +7,7 @@ import com.openblocks.moduleinterface.OpenBlocksModule;
 import com.openblocks.moduleinterface.models.OpenBlocksFile;
 import com.openblocks.moduleinterface.models.OpenBlocksProjectMetadata;
 import com.openblocks.moduleinterface.models.OpenBlocksRawProject;
+import com.openblocks.moduleinterface.models.code.BlockCode;
 import com.openblocks.moduleinterface.models.config.OpenBlocksConfig;
 import com.openblocks.moduleinterface.models.layout.LayoutViewXMLAttribute;
 import com.openblocks.moduleinterface.projectfiles.OpenBlocksCode;
@@ -166,11 +167,9 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
 
         // =========================================================================================
-        ByteBuffer code_buff = ByteBuffer.wrap(new byte[0]);
+        String code_serialized = serializeCode(code);
 
-        // TODO: 3/15/21 this
-
-        rawProject.files.add(new OpenBlocksFile(code_buff.array(), "code"));
+        rawProject.files.add(new OpenBlocksFile(code_serialized.getBytes(), "code"));
         // =========================================================================================
 
 
@@ -183,7 +182,9 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         return rawProject;
     }
 
-    /* Serialized should be something like this
+    /* Serialized layout should be something like this
+     *
+     * Note: Line breaks doesn't count
      *
      * LinearLayout
      * 0x11 <- used to separate xml attributes
@@ -234,6 +235,52 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             }
 
             out.append(childs);
+        }
+
+        return out.toString();
+    }
+
+    /* Serialized code should be something like this
+     *
+     * Note: Line breaks doesn't count
+     *
+     * 0x11                 <- this is the separator for code templates
+     * opcode %s.showMessage("%s");
+     * 0x11
+     * opcode2 %var = %n + %n.%var = %n + %n
+     * etc..
+     * 0x22                 <- this is the separator for blocks
+     * 0                    <- code template index
+     * .Hello World         <- Value as the argument, you can create multiple argument by adding null before each arguments
+     * 0x22
+     * 4
+     * .10
+     * .Hello World2
+     */
+
+    private String serializeCode(OpenBlocksCode code) {
+        // Shouldn't be using StringBuilder for this, but this is all I know
+        StringBuilder out = new StringBuilder();
+
+        ArrayList<String> template_keys = (ArrayList<String>) code.code_templates.keySet();
+
+        // Serialize the code templates
+        for (String key: template_keys) {
+            out.append(0x11);
+            out.append(key);
+            out.append(0x0);
+            out.append(code.code_templates.get(key));
+        }
+
+        // Serialize blocks
+        for (BlockCode block : code.blocks) {
+            out.append(0x22);
+            out.append(template_keys.indexOf(block.opcode));
+
+            for (String parameter : block.parameters) {
+                out.append(0x0);
+                out.append(parameter);
+            }
         }
 
         return out.toString();
