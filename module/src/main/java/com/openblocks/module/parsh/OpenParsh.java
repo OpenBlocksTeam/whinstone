@@ -184,4 +184,60 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
         return rawProject;
     }
+
+    /* Serialized should be something like this
+     *
+     * LinearLayout
+     * 0x11 <- used to separate xml attributes
+     * android.layout_width.match_parent
+     * 0x11
+     * android.layout_height.match_parent
+     * 0x11
+     * etc..
+     * 0x22 <- used to separate childs
+     *   LinearLayout <- I use this indentation to easily visualize the child's data
+     *   0x11
+     *   android.layout_width.match_parent
+     *   0x11
+     *   android.layout_width.wrap_content
+     * 0x22
+     *   LinearLayout
+     *   etc etc..
+     */
+
+    private String serializeLayout(OpenBlocksLayout layoutView) {
+        // Shouldn't be using StringBuilder for this, but this is all I know
+        StringBuilder out = new StringBuilder();
+
+        out.append(layoutView.view_name); // View name
+
+        // Serialize xml attributes
+        // TODO: 3/18/21 Optimize this by grouping each attributes depending on their prefix
+        for (LayoutViewXMLAttribute xml_attribute : layoutView.xml_attributes) {
+            out.append(0x11); // This hex is used to separate each attributes
+            out.append(xml_attribute.prefix);
+            out.append(0x00);
+            out.append(xml_attribute.attribute_name);
+            out.append(0x00);
+            out.append(xml_attribute.value);
+        }
+
+        // Check if this view has any childs
+        if (layoutView.childs.size() != 0) {
+            // K, serialize those childs
+            StringBuilder childs = new StringBuilder();
+
+            // Recursively call ourself
+            for (OpenBlocksLayout child: layoutView.childs) {
+                String serialized_child = serializeLayout(child);
+
+                childs.append(0x22); // This hex is used to separate each childs
+                childs.append(serialized_child);
+            }
+
+            out.append(childs);
+        }
+
+        return out.toString();
+    }
 }
