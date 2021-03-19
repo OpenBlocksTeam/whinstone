@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * OpenParsh is meant to be an efficient parser where it converts both code and layout into
@@ -117,7 +118,6 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
     @Override
     public OpenBlocksProjectMetadata parseMetadata(OpenBlocksRawProject project) {
         OpenBlocksFile metadata_file = null;
-        OpenBlocksProjectMetadata metadata = null;
 
         for (OpenBlocksFile file : project.files) {
             if (file.name.equals("metadata")) {
@@ -311,5 +311,53 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         }
 
         return out.toString();
+    }
+
+    private enum ParseCodeMode {
+        CODE_TEMPLATE,
+        BLOCK
+    }
+    
+    private OpenBlocksCode parseCode(String serialized) {
+        ParseCodeMode current_mode = null;
+
+        HashMap<String, String> code_template = new HashMap<>();
+        ArrayList<BlockCode> blocks = new ArrayList<>();
+
+        StringBuilder buffer = new StringBuilder();
+        String opcode = "";
+        int data_index = 0;
+
+        for (char c : serialized.toCharArray()) {
+            if (c == 0x11) {
+                current_mode = ParseCodeMode.CODE_TEMPLATE;
+
+                data_index = 0;
+            } else if (c == 0x22) {
+                current_mode = ParseCodeMode.BLOCK;
+
+                data_index = 0;
+            }
+
+            if (current_mode == ParseCodeMode.CODE_TEMPLATE) {
+                if (c == 0x0) {
+                    if (data_index == 1) {
+                        code_template.put(opcode, buffer.toString());
+                    } else {
+                        opcode = buffer.toString();
+
+                        data_index++;
+                    }
+
+                    buffer = new StringBuilder();
+
+                } else {
+                    buffer.append(c);
+                }
+
+            } else if (current_mode == ParseCodeMode.BLOCK) {
+                // TODO: 3/19/21 this 
+            }
+        }
     }
 }
