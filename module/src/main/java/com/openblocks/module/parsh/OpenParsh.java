@@ -322,10 +322,22 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         ParseCodeMode current_mode = null;
 
         HashMap<String, String> code_template = new HashMap<>();
+        ArrayList<String> code_template_keys = new ArrayList<>();
         ArrayList<BlockCode> blocks = new ArrayList<>();
 
+        // This is the buffer for everything, but make sure to empty it after you use it
         StringBuilder buffer = new StringBuilder();
+
+        // code template ===
         String opcode = "";
+        // code template ===
+
+        // blocks ===
+        ArrayList<String> arguments = new ArrayList<>();
+        int template_index = 0;
+        // blocks ===
+
+        // This counter is just going to be used to count, nothing else
         int data_index = 0;
 
         for (char c : serialized.toCharArray()) {
@@ -334,15 +346,23 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
                 data_index = 0;
             } else if (c == 0x22) {
+                // If the previous mode was a block, we should save the block into the blocks array list
+                if (current_mode == ParseCodeMode.BLOCK) {
+                    blocks.add(new BlockCode(code_template.get(code_template_keys.get(template_index)), arguments));
+                }
+
                 current_mode = ParseCodeMode.BLOCK;
 
                 data_index = 0;
             }
 
+            ////////////////////////////////////////////////////////////////////////////////////////
+
             if (current_mode == ParseCodeMode.CODE_TEMPLATE) {
                 if (c == 0x0) {
                     if (data_index == 1) {
                         code_template.put(opcode, buffer.toString());
+                        code_template_keys.add(opcode);
                     } else {
                         opcode = buffer.toString();
 
@@ -355,9 +375,31 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
                     buffer.append(c);
                 }
 
+            ////////////////////////////////////////////////////////////////////////////////////////
+
             } else if (current_mode == ParseCodeMode.BLOCK) {
-                // TODO: 3/19/21 this 
+                if (c == 0x0) {
+                    if (data_index == 1) {
+                        // This is the code template index
+                        template_index = Integer.parseInt(buffer.toString());
+
+                        // Empty the buffer
+                        buffer = new StringBuilder();
+                    } else if (data_index > 1) {
+                        // This is an argument
+                        arguments.add(buffer.toString());
+
+                        // Empty the buffer
+                        buffer = new StringBuilder();
+                    }
+
+                    data_index++;
+                } else {
+                    buffer.append(c);
+                }
             }
         }
+
+        return new OpenBlocksCode(code_template, blocks);
     }
 }
