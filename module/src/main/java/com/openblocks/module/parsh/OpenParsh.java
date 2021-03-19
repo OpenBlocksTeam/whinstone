@@ -16,6 +16,7 @@ import com.openblocks.moduleinterface.projectfiles.OpenBlocksLayout;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -112,7 +113,21 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
     @Override
     public OpenBlocksCode parseCode(OpenBlocksRawProject project) {
-        return null;
+        OpenBlocksFile code_file = null;
+
+        for (OpenBlocksFile file : project.files) {
+            if (file.name.equals("code")) {
+                code_file = file;
+
+                break;
+            }
+        }
+
+        if (code_file == null) {
+            throw new RuntimeException("Parsing failed, code file cannot be found.");
+        }
+
+        return parseCode( new String(code_file.data, StandardCharsets.UTF_8));
     }
 
     @Override
