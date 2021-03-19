@@ -16,7 +16,6 @@ import com.openblocks.moduleinterface.projectfiles.OpenBlocksLayout;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
-import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 
@@ -118,6 +117,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
     @Override
     public OpenBlocksProjectMetadata parseMetadata(OpenBlocksRawProject project) {
         OpenBlocksFile metadata_file = null;
+        OpenBlocksProjectMetadata metadata = null;
 
         for (OpenBlocksFile file : project.files) {
             if (file.name.equals("metadata")) {
@@ -131,11 +131,42 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             throw new RuntimeException("Parsing failed, metadata file cannot be found.");
         }
 
-        ByteBuffer metadata_data = ByteBuffer.wrap(metadata_file.data);
+        StringBuilder buffer = new StringBuilder();
+        ArrayList<String> metadata_split = new ArrayList<>();
+        int data_index = 0;
 
-        // TODO: 3/15/21 this 
+        int version_code = 0;
 
-        return null;
+        // This data file contains
+        // index:    0       1           2              3
+        //        {name}.{package}.{version_name}.{version_code}
+        for (byte current_byte: metadata_file.data) {
+            // If the current byte isn't a separator
+            if (current_byte != 0x0) {
+                if (data_index == 3) {
+                    version_code = current_byte;
+
+                    break;
+                } else {
+                    buffer.append(current_byte);
+                }
+            } else {
+                // Add the buffer
+                metadata_split.add(buffer.toString());
+
+                // Empty buffer
+                buffer = new StringBuilder();
+
+                data_index++;
+            }
+        }
+
+        return new OpenBlocksProjectMetadata(
+                metadata_split.get(0),
+                metadata_split.get(1),
+                metadata_split.get(2),
+                version_code
+        );
     }
 
     @Override
@@ -147,22 +178,18 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         rawProject.files.add(new OpenBlocksFile(version.getBytes(), "openparsh-ver"));
 
         // =========================================================================================
-        ByteBuffer metadata_buff = ByteBuffer.wrap(
-                new byte[
-                    metadata.getName().length() +
-                    metadata.getPackageName().length() +
-                    metadata.getVersionName().length() +
-                    1024 /* This 1024 is just to make sure everything shouldn't pass the limit */
-                ]
-        );
 
-        // Simply {name}.{package}.{version_name}.version_code
-        metadata_buff.put(metadata.getName().getBytes());
-        metadata_buff.put(metadata.getPackageName().getBytes());
-        metadata_buff.put(metadata.getVersionName().getBytes());
-        metadata_buff.putInt(metadata.getVersionCode());
+        // Simply {name}.{package}.{version_name}.{version_code}
+        String metadata_ser =
+                metadata.getName() +
+                0x0 +
+                metadata.getPackageName() +
+                0x0 +
+                metadata.getVersionName() +
+                0x0 +
+                metadata.getVersionCode();
 
-        rawProject.files.add(new OpenBlocksFile(metadata_buff.array(), "metadata"));
+        rawProject.files.add(new OpenBlocksFile(metadata_ser.getBytes(), "metadata"));
         // =========================================================================================
 
 
