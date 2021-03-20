@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 
 /**
  * OpenParsh is meant to be an efficient parser where it converts both code and layout into
@@ -413,7 +414,54 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             index++;
         }
 
-        return null;
+        // Step 2: Arrange it's childs
+
+        // FIXME: 3/20/21 This doesn't work!
+        
+        // Kind of hard to explain and the process is a bit complex
+        iterator = views.iterator();
+
+        int previous_substack = 0;
+
+        while (iterator.hasNext()) {
+            Pair<Integer, OpenBlocksLayout> view = iterator.next();
+
+            current_view = view.second;
+
+            arrangeChilds(view.first, previous_substack);
+
+            previous_substack = view.first;
+        }
+
+        return root_view;
+    }
+
+    Iterator<Pair<Integer, OpenBlocksLayout>> iterator;
+
+    OpenBlocksLayout root_view;
+
+    OpenBlocksLayout current_view;
+    OpenBlocksLayout parent_view;
+
+    int parent_substack;
+
+    private void arrangeChilds(int view_substack, int previous_substack) {
+        if (view_substack == 0) {
+            // This is the root view
+            root_view = current_view;
+
+        } else if (view_substack == parent_substack) {
+            // This is our neighbour
+            parent_view = current_view;
+
+        } else if (view_substack == previous_substack + 1) {
+            // This is our child
+            parent_view.childs.add(current_view);
+
+        } else if (view_substack < previous_substack) {
+            // This is our neighbour
+            parent_view = current_view;
+        }
     }
 
 
