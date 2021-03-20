@@ -59,8 +59,8 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         do {
             final String AB = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
             SecureRandom rnd = new SecureRandom();
-
             StringBuilder sb = new StringBuilder(16);
+
             for (int i = 0; i < 16; i++)
                 sb.append(AB.charAt(rnd.nextInt(AB.length())));
 
@@ -303,7 +303,116 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
     }
 
     private OpenBlocksLayout parseLayout(String serialized) {
-        // TODO: 3/20/21 THIS
+        StringBuilder buffer = new StringBuilder();
+
+        // Step 1: Convert this serialized data into a list views
+
+        // ArrayList of Integer: substack, OpenBlocksLayout: view
+        ArrayList<Pair<Integer, OpenBlocksLayout>> views = new ArrayList<>();
+        String view_type = "";
+        ArrayList<LayoutViewXMLAttribute> attributes = new ArrayList<>();
+
+        int argument_counter = 0;
+        int substack = 0;
+
+        int index = 0;
+
+        int attribute_counter = 0;
+        String attribute_prefix = "";
+        String attribute_name = "";
+        String attribute_value = "";
+
+        boolean next_is_substack = false;
+        boolean reading_attribute = false;
+
+        for (byte b : serialized.getBytes()) {
+            if (next_is_substack) {
+                substack = b;
+
+                next_is_substack = false;
+
+                // Don't need to go through the loop, just skip em
+                continue;
+            }
+
+            if (reading_attribute) {
+
+                // If the current byte is not a separator
+                if (b != 0x0) {
+                    buffer.append((char) b);
+
+                } else {
+                    // This is 0x0, the separator
+
+                    if (attribute_counter == 0) {
+                        // First item (prefix or namespace)
+                        attribute_prefix = buffer.toString();
+
+                    } else if (attribute_counter == 1) {
+                        // Second item, The attribute name
+                        attribute_name = buffer.toString();
+
+                    } else if (attribute_counter == 2) {
+                        // Third item, The attribute value
+                        attribute_value = buffer.toString();
+
+                        // Create the attribute
+                        attributes.add(
+                                new LayoutViewXMLAttribute(
+                                        attribute_prefix,
+                                        attribute_name,
+                                        attribute_value
+                                )
+                        );
+
+                        // In this point, we're done parsing the attribute
+                        reading_attribute = false;
+                    }
+
+                    // Reset our buffer
+                    buffer = new StringBuilder();
+
+                    // Increase our attribute counter
+                    attribute_counter++;
+                }
+
+                // Don't need to go through the loop, just skip em
+                continue;
+            }
+
+            // Is this an attribute separator?
+            if (b == 0x11) {
+                if (argument_counter == 0) {
+                    // If the argument counter kicks in, means that we're on the end of the view type
+                    view_type = buffer.toString();
+
+                    // Clear the buffer
+                    buffer = new StringBuilder();
+                } else if (argument_counter > 0) {
+                    reading_attribute = true;
+
+                    // Clear the buffer
+                    buffer = new StringBuilder();
+                }
+
+                argument_counter++;
+
+            // Is this the substack?
+            } else if (b == 0x22) {
+                next_is_substack = true;
+
+            // Is this a view separator?
+            } else if (b == 0x33) {
+                // End
+                views.add(new Pair<>(substack, new OpenBlocksLayout(view_type, attributes)));
+
+            } else {
+                buffer.append((char) b);
+            }
+
+            index++;
+        }
+
         return null;
     }
 
