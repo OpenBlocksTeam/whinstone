@@ -216,7 +216,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
 
         // =========================================================================================
-        String layout_serialized = serializeLayout(layout);
+        String layout_serialized = serializeLayout(layout, 0);
 
         rawProject.files.add(new OpenBlocksFile(layout_serialized.getBytes(), "layout"));
         // =========================================================================================
@@ -229,24 +229,40 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
      * Note: Line breaks doesn't count
      *
      * LinearLayout
-     * 0x11 <- used to separate xml attributes
+     * 0x11                             <- used to separate xml attributes
+     * android.id.+@/linearLayout1
+     * 0x11
      * android.layout_width.match_parent
      * 0x11
      * android.layout_height.match_parent
      * 0x11
      * etc..
-     * 0x22 <- used to separate childs
-     *   LinearLayout <- I use this indentation to easily visualize the child's data
-     *   0x11
-     *   android.layout_width.match_parent
-     *   0x11
-     *   android.layout_width.wrap_content
-     * 0x22
-     *   LinearLayout
-     *   etc etc..
+     * 0x22 0x0
+     * 0x33                             <- Used to separate each views
+     *
+     * LinearLayout
+     * 0x11
+     * android.id.+@/linearLayout2
+     * 0x11
+     * android.layout_width.match_parent
+     * 0x11
+     * android.layout_width.wrap_content
+     * etc..
+     * 0x22                             <- This 0x22 indicates that the _number next to it_ is the "substack" / indicates that this view is a child of the above view
+     * 0x1                                | TL;DR Basically the depth of this view as a child
+     * 0x33
+     *
+     * LinearLayout
+     * etc etc..
      */
 
-    private String serializeLayout(OpenBlocksLayout layoutView) {
+    /**
+     * This function serializes an {@link OpenBlocksLayout} into a binary data
+     * @param layoutView The layout that is to be serialized
+     * @param depth The depth of this layout (as a child), should be 0 when you call this
+     * @return The serialized layout
+     */
+    private String serializeLayout(OpenBlocksLayout layoutView, int depth) {
         // Shouldn't be using StringBuilder for this, but this is all I know
         StringBuilder out = new StringBuilder();
 
@@ -263,6 +279,10 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             out.append(xml_attribute.value);
         }
 
+        // Because we're serializing the parent layout, the depth must be 0
+        out.append(0x22);
+        out.append(depth);
+
         // Check if this view has any childs
         if (layoutView.childs.size() != 0) {
             // K, serialize those childs
@@ -270,9 +290,9 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
             // Recursively call ourself
             for (OpenBlocksLayout child: layoutView.childs) {
-                String serialized_child = serializeLayout(child);
+                String serialized_child = serializeLayout(child, depth + 1);
 
-                childs.append(0x22); // This hex is used to separate each childs
+                childs.append(0x33); // This hex is used to separate each views
                 childs.append(serialized_child);
             }
 
@@ -281,6 +301,12 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
         return out.toString();
     }
+
+    private OpenBlocksLayout parseLayout(String serialized) {
+        // TODO: 3/20/21 THIS
+        return null;
+    }
+
 
     /* Serialized code should be something like this
      *
@@ -299,6 +325,8 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
      * .10
      * .Hello World2
      */
+
+    // TODO: 3/20/21 Add nested blocks support
 
     private String serializeCode(OpenBlocksCode code) {
         // Shouldn't be using StringBuilder for this, but this is all I know
