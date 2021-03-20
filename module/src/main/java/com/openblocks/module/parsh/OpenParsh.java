@@ -238,23 +238,23 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
      * android.layout_height.match_parent
      * 0x11
      * etc..
-     * 0x22 0x0
-     * 0x33                             <- Used to separate each views
+     * 0x22                            <- Opening bracket for our childs
      *
-     * LinearLayout
-     * 0x11
-     * android.id.+@/linearLayout2
-     * 0x11
-     * android.layout_width.match_parent
-     * 0x11
-     * android.layout_width.wrap_content
-     * etc..
-     * 0x22                             <- This 0x22 indicates that the _number next to it_ is the "substack" / indicates that this view is a child of the above view
-     * 0x1                                | TL;DR Basically the depth of this view as a child
-     * 0x33
+     *   LinearLayout                  <- Child of the above view
+     *   0x11
+     *   android.id.+@/linearLayout2
+     *   0x11
+     *   android.layout_width.match_parent
+     *   0x11
+     *   android.layout_width.wrap_content
+     *   etc..
+     *   0x22                          <- Empty childs
+     *   0x33
      *
-     * LinearLayout
-     * etc etc..
+     *   LinearLayout
+     *   etc etc..
+     *
+     * 0x33                            <- Closing bracket for childs
      */
 
     /**
@@ -280,9 +280,8 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             out.append(xml_attribute.value);
         }
 
-        // Because we're serializing the parent layout, the depth must be 0
+        // Open the bracket for our childs
         out.append(0x22);
-        out.append(depth);
 
         // Check if this view has any childs
         if (layoutView.childs.size() != 0) {
@@ -293,12 +292,15 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             for (OpenBlocksLayout child: layoutView.childs) {
                 String serialized_child = serializeLayout(child, depth + 1);
 
-                childs.append(0x33); // This hex is used to separate each views
                 childs.append(serialized_child);
             }
 
+            // Then write the childs
             out.append(childs);
         }
+
+        // Close the "bracket"
+        out.append(0x33);
 
         return out.toString();
     }
@@ -306,15 +308,14 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
     private OpenBlocksLayout parseLayout(String serialized) {
         StringBuilder buffer = new StringBuilder();
 
-        // Step 1: Convert this serialized data into a list views
-
         // ArrayList of Integer: substack, OpenBlocksLayout: view
-        ArrayList<Pair<Integer, OpenBlocksLayout>> views = new ArrayList<>();
+        OpenBlocksLayout view = null;
+        ArrayList<OpenBlocksLayout> childs = new ArrayList<>();
+
         String view_type = "";
         ArrayList<LayoutViewXMLAttribute> attributes = new ArrayList<>();
 
         int argument_counter = 0;
-        int substack = 0;
 
         int index = 0;
 
@@ -323,18 +324,12 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         String attribute_name = "";
         String attribute_value = "";
 
-        boolean next_is_substack = false;
+        boolean inside_childs = false;
         boolean reading_attribute = false;
 
+        boolean was_closing_child = false;
+
         for (byte b : serialized.getBytes()) {
-            if (next_is_substack) {
-                substack = b;
-
-                next_is_substack = false;
-
-                // Don't need to go through the loop, just skip em
-                continue;
-            }
 
             if (reading_attribute) {
 
@@ -381,6 +376,31 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
                 continue;
             }
 
+            if (inside_childs) {
+                buffer.append((char) b);
+
+                if (b == 0x33) {
+
+                    // If it was a closing child and we got closing child, means this is the closing of the parent / e n d   o f   t h i s   v i e w
+                    if (was_closing_child) {
+                        // END OF THIS VIEW!!!
+                        return new OpenBlocksLayout(childs, view_type, attributes);
+
+                    } else {
+                        // This indicates the end of a child's view
+                        // Now recursively call ourselves to serialize our child
+                        childs.add(parseLayout(buffer.toString()));
+
+                        was_closing_child = true;
+                        continue;
+                    }
+                }
+
+                was_closing_child = false;
+
+                continue;
+            }
+
             // Is this an attribute separator?
             if (b == 0x11) {
                 if (argument_counter == 0) {
@@ -398,15 +418,11 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
                 argument_counter++;
 
-            // Is this the substack?
+            // Is this the childs?
             } else if (b == 0x22) {
-                next_is_substack = true;
+                inside_childs = true;
 
-            // Is this a view separator?
-            } else if (b == 0x33) {
-                // End
-                views.add(new Pair<>(substack, new OpenBlocksLayout(view_type, attributes)));
-
+                buffer = new StringBuilder();
             } else {
                 buffer.append((char) b);
             }
@@ -414,54 +430,8 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
             index++;
         }
 
-        // Step 2: Arrange it's childs
-
-        // FIXME: 3/20/21 This doesn't work!
-        
-        // Kind of hard to explain and the process is a bit complex
-        iterator = views.iterator();
-
-        int previous_substack = 0;
-
-        while (iterator.hasNext()) {
-            Pair<Integer, OpenBlocksLayout> view = iterator.next();
-
-            current_view = view.second;
-
-            arrangeChilds(view.first, previous_substack);
-
-            previous_substack = view.first;
-        }
-
-        return root_view;
-    }
-
-    Iterator<Pair<Integer, OpenBlocksLayout>> iterator;
-
-    OpenBlocksLayout root_view;
-
-    OpenBlocksLayout current_view;
-    OpenBlocksLayout parent_view;
-
-    int parent_substack;
-
-    private void arrangeChilds(int view_substack, int previous_substack) {
-        if (view_substack == 0) {
-            // This is the root view
-            root_view = current_view;
-
-        } else if (view_substack == parent_substack) {
-            // This is our neighbour
-            parent_view = current_view;
-
-        } else if (view_substack == previous_substack + 1) {
-            // This is our child
-            parent_view.childs.add(current_view);
-
-        } else if (view_substack < previous_substack) {
-            // This is our neighbour
-            parent_view = current_view;
-        }
+        // Failed to parse
+        return null;
     }
 
 
