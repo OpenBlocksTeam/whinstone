@@ -383,7 +383,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         // This counter is just going to be used to count, nothing else
         int data_index = 0;
 
-        for (char c : serialized.toCharArray()) {
+        for (byte c : serialized.getBytes()) {
             if (c == 0x11) {
                 current_mode = ParseCodeMode.CODE_TEMPLATE;
 
