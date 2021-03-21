@@ -1,9 +1,12 @@
 package com.openblocks.module.parsh;
 
 import android.content.Context;
-import android.util.Pair;
+
+import androidx.annotation.NonNull;
 
 import com.openblocks.moduleinterface.OpenBlocksModule;
+import com.openblocks.moduleinterface.callbacks.Logger;
+import com.openblocks.moduleinterface.exceptions.ParseException;
 import com.openblocks.moduleinterface.models.OpenBlocksFile;
 import com.openblocks.moduleinterface.models.OpenBlocksProjectMetadata;
 import com.openblocks.moduleinterface.models.OpenBlocksRawProject;
@@ -13,14 +16,11 @@ import com.openblocks.moduleinterface.models.layout.LayoutViewXMLAttribute;
 import com.openblocks.moduleinterface.projectfiles.OpenBlocksCode;
 import com.openblocks.moduleinterface.projectfiles.OpenBlocksLayout;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 
 /**
  * OpenParsh is meant to be an efficient parser where it converts both code and layout into
@@ -37,7 +37,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
     }
 
     @Override
-    public void initialize(Context context) {
+    public void initialize(Context context, Logger logger) {
         this.context = new WeakReference<>(context);
     }
 
@@ -72,12 +72,6 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         return result;
     }
 
-    // Shouldn't this be determined by the editor modules?
-    @Override
-    public Pair<OpenBlocksCode, OpenBlocksLayout> initializeEmptyProject() {
-        return null;
-    }
-
     // TODO: 3/15/21 Make a more complex structure that store different stuff like
     //  "this activity" to improve efficiency in reading these files
 
@@ -89,7 +83,8 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
      */
 
     @Override
-    public OpenBlocksLayout parseLayout(OpenBlocksRawProject project) {
+    @NonNull
+    public OpenBlocksLayout parseLayout(OpenBlocksRawProject project) throws ParseException {
         OpenBlocksFile layout_file = null;
 
         for (OpenBlocksFile file : project.files) {
@@ -101,19 +96,15 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         }
 
         if (layout_file == null) {
-            throw new RuntimeException("Parsing failed, layout file cannot be found.");
+            throw new ParseException("Parsing failed, layout file cannot be found.");
         }
 
-        InputStream stream = new ByteArrayInputStream(layout_file.data);
-
-
-        // TODO: 3/15/21 This
-
-        return null;
+        return parseLayout(new String(layout_file.data, StandardCharsets.UTF_8));
     }
 
     @Override
-    public OpenBlocksCode parseCode(OpenBlocksRawProject project) {
+    @NonNull
+    public OpenBlocksCode parseCode(OpenBlocksRawProject project) throws ParseException {
         OpenBlocksFile code_file = null;
 
         for (OpenBlocksFile file : project.files) {
@@ -125,14 +116,15 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         }
 
         if (code_file == null) {
-            throw new RuntimeException("Parsing failed, code file cannot be found.");
+            throw new ParseException("Parsing failed, code file cannot be found.");
         }
 
-        return parseCode( new String(code_file.data, StandardCharsets.UTF_8));
+        return parseCode(new String(code_file.data, StandardCharsets.UTF_8));
     }
 
     @Override
-    public OpenBlocksProjectMetadata parseMetadata(OpenBlocksRawProject project) {
+    @NonNull
+    public OpenBlocksProjectMetadata parseMetadata(OpenBlocksRawProject project) throws ParseException {
         OpenBlocksFile metadata_file = null;
 
         for (OpenBlocksFile file : project.files) {
@@ -144,7 +136,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         }
 
         if (metadata_file == null) {
-            throw new RuntimeException("Parsing failed, metadata file cannot be found.");
+            throw new ParseException("Parsing failed, metadata file cannot be found.");
         }
 
         StringBuilder buffer = new StringBuilder();
@@ -186,6 +178,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
     }
 
     @Override
+    @NonNull
     public OpenBlocksRawProject saveProject(OpenBlocksProjectMetadata metadata, OpenBlocksCode code, OpenBlocksLayout layout) {
         OpenBlocksRawProject rawProject = new OpenBlocksRawProject();
         rawProject.files = new ArrayList<>();
@@ -305,11 +298,10 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         return out.toString();
     }
 
-    private OpenBlocksLayout parseLayout(String serialized) {
+    private OpenBlocksLayout parseLayout(String serialized) throws ParseException {
         StringBuilder buffer = new StringBuilder();
 
         // ArrayList of Integer: substack, OpenBlocksLayout: view
-        OpenBlocksLayout view = null;
         ArrayList<OpenBlocksLayout> childs = new ArrayList<>();
 
         String view_type = "";
@@ -317,12 +309,10 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
 
         int argument_counter = 0;
 
-        int index = 0;
-
         int attribute_counter = 0;
         String attribute_prefix = "";
         String attribute_name = "";
-        String attribute_value = "";
+        String attribute_value;
 
         boolean inside_childs = false;
         boolean reading_attribute = false;
@@ -427,11 +417,10 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
                 buffer.append((char) b);
             }
 
-            index++;
         }
 
         // Failed to parse
-        return null;
+        throw new ParseException("Failed to parse, loop is skipped, Is the layout empty / corrupted?");
     }
 
 
@@ -459,7 +448,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         // Shouldn't be using StringBuilder for this, but this is all I know
         StringBuilder out = new StringBuilder();
 
-        ArrayList<String> template_keys = (ArrayList<String>) code.code_templates.keySet();
+        ArrayList<String> template_keys = new ArrayList<>(code.code_templates.keySet());
 
         // Serialize the code templates
         for (String key: template_keys) {
