@@ -1,4 +1,4 @@
-package com.openblocks.module.parsh;
+package com.openblocks.module.whinstone;
 
 import android.content.Context;
 

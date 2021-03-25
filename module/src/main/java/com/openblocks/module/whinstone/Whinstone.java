@@ -1,4 +1,4 @@
-package com.openblocks.module.parsh;
+package com.openblocks.module.whinstone;
 
 import android.content.Context;
 
@@ -23,10 +23,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
- * OpenParsh is meant to be an efficient parser where it converts both code and layout into
+ * Whinstone is meant to be an efficient parser where it converts both code and layout into
  * a byte-level format, where it will save some storage space
  */
-public class OpenParsh implements OpenBlocksModule.ProjectParser {
+public class Whinstone implements OpenBlocksModule.ProjectParser {
 
     WeakReference<Context> context;
     final String version = "1.0";
@@ -184,7 +184,7 @@ public class OpenParsh implements OpenBlocksModule.ProjectParser {
         rawProject.files = new ArrayList<>();
 
         // Add a file used to indicate the version
-        rawProject.files.add(new OpenBlocksFile(version.getBytes(), "openparsh-ver"));
+        rawProject.files.add(new OpenBlocksFile(version.getBytes(), "whinstone-ver"));
 
         // =========================================================================================
 
