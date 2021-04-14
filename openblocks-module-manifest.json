@@ -1,0 +1,13 @@
+{
+  "jar": "out.jar",
+  "modules": [
+    {
+      "name": "Whinstone",
+      "description": "An efficient project parser module",
+      "classpath": "com.openblocks.module.whinstone.Whinstone",
+      "version": 1,
+      "lib_version": 1,
+      "type": "PROJECT_PARSER"
+    } 
+  ]
+}

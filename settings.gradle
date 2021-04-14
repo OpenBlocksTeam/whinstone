@@ -1,4 +1,2 @@
-include ':interface'
-include ':module'
-project(':interface').projectDir = new File(rootDir, 'module-interface/lib/')
-rootProject.name = "open-parsh"
+rootProject.name = 'openblocks_module_template'
+
