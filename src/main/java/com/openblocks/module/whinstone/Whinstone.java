@@ -2,6 +2,7 @@ package com.openblocks.module.whinstone;
 
 import android.content.Context;
 
+import android.graphics.Color;
 import com.openblocks.moduleinterface.OpenBlocksModule;
 import com.openblocks.moduleinterface.callbacks.Logger;
 import com.openblocks.moduleinterface.exceptions.ParseException;
@@ -18,7 +19,6 @@ import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.HashMap;
 
 /**
  * Whinstone is meant to be an efficient parser where it converts both code and layout into
@@ -81,7 +81,6 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
      */
 
     @Override
-    @NonNull
     public OpenBlocksLayout parseLayout(OpenBlocksRawProject project) throws ParseException {
         OpenBlocksFile layout_file = null;
 
@@ -101,7 +100,6 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
     }
 
     @Override
-    @NonNull
     public OpenBlocksCode parseCode(OpenBlocksRawProject project) throws ParseException {
         OpenBlocksFile code_file = null;
 
@@ -121,7 +119,6 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
     }
 
     @Override
-    @NonNull
     public OpenBlocksProjectMetadata parseMetadata(OpenBlocksRawProject project) throws ParseException {
         OpenBlocksFile metadata_file = null;
 
@@ -176,7 +173,6 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
     }
 
     @Override
-    @NonNull
     public OpenBlocksRawProject saveProject(OpenBlocksProjectMetadata metadata, OpenBlocksCode code, OpenBlocksLayout layout) {
         OpenBlocksRawProject rawProject = new OpenBlocksRawProject();
         rawProject.files = new ArrayList<>();
@@ -426,16 +422,15 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
      *
      * Note: Line breaks doesn't count
      *
-     * 0x11                 <- this is the separator for code templates
-     * opcode %s.showMessage("%s");
-     * 0x11
-     * opcode2 %var = %n + %n.%var = %n + %n
-     * etc..
+     * 0x11                 <- start of block collection name
+     * blocks-view          <- block collection name used in this code
      * 0x22                 <- this is the separator for blocks
-     * 0                    <- code template index
+     * 0x00 0x00 0x00       <- block color (3 bytes wide (Red, Green, and Blue))
+     * toast                <- block opcode
      * .Hello World         <- Value as the argument, you can create multiple argument by adding null before each arguments
      * 0x22
-     * 4
+     * 0x00 0x00 0x00
+     * log
      * .10
      * .Hello World2
      */
@@ -446,20 +441,29 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
         // Shouldn't be using StringBuilder for this, but this is all I know
         StringBuilder out = new StringBuilder();
 
-        ArrayList<String> template_keys = new ArrayList<>(code.code_templates.keySet());
+        String block_collection_name = code.block_collection_name;
 
-        // Serialize the code templates
-        for (String key: template_keys) {
-            out.append(0x11);
-            out.append(key);
-            out.append(0x0);
-            out.append(code.code_templates.get(key));
-        }
+        // header of block_collection_name
+        out.append(0x11);
+
+        // Put the block collection name
+        out.append(block_collection_name);
+
+        // End the block collection name
+        out.append(0x00);
 
         // Serialize blocks
         for (BlockCode block : code.blocks) {
+            // Put the block color
             out.append(0x22);
-            out.append(template_keys.indexOf(block.opcode));
+
+            Color block_color = Color.valueOf(block.color);
+            out.append(block_color.red());
+            out.append(block_color.green());
+            out.append(block_color.blue());
+
+            // Then opcode
+            out.append(block.opcode);
 
             for (String parameter : block.parameters) {
                 out.append(0x0);
@@ -470,16 +474,17 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
         return out.toString();
     }
 
+    // TODO: 4/14/21 Make this mess consistent again
+
     private enum ParseCodeMode {
-        CODE_TEMPLATE,
+        BLOCK_COLLECTION_NAME,
+        BLOCK_COLOR,
         BLOCK
     }
     
     private OpenBlocksCode parseCode(String serialized) {
         ParseCodeMode current_mode = null;
 
-        HashMap<String, String> code_template = new HashMap<>();
-        ArrayList<String> code_template_keys = new ArrayList<>();
         ArrayList<BlockCode> blocks = new ArrayList<>();
 
         // This is the buffer for everything, but make sure to empty it after you use it
@@ -487,11 +492,17 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
 
         // code template ===
         String opcode = "";
+        String block_collection_name = "";
         // code template ===
 
         // blocks ===
         ArrayList<String> arguments = new ArrayList<>();
-        int template_index = 0;
+
+        int color_red = 0;
+        int color_green = 0;
+        int color_blue = 0;
+
+        short color_counter = 0;
         // blocks ===
 
         // This counter is just going to be used to count, nothing else
@@ -499,35 +510,30 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
 
         for (byte c : serialized.getBytes()) {
             if (c == 0x11) {
-                current_mode = ParseCodeMode.CODE_TEMPLATE;
+                current_mode = ParseCodeMode.BLOCK_COLLECTION_NAME;
 
                 data_index = 0;
             } else if (c == 0x22) {
                 // If the previous mode was a block, we should save the block into the blocks array list
                 if (current_mode == ParseCodeMode.BLOCK) {
-                    blocks.add(new BlockCode(code_template.get(code_template_keys.get(template_index)), arguments));
+                    blocks.add(new BlockCode(opcode, Color.rgb(color_red, color_green, color_blue), arguments));
                 }
 
-                current_mode = ParseCodeMode.BLOCK;
+                // Start parsing the color
+                current_mode = ParseCodeMode.BLOCK_COLOR;
 
                 data_index = 0;
             }
 
             ////////////////////////////////////////////////////////////////////////////////////////
 
-            if (current_mode == ParseCodeMode.CODE_TEMPLATE) {
+            if (current_mode == ParseCodeMode.BLOCK_COLLECTION_NAME) {
                 if (c == 0x0) {
-                    if (data_index == 1) {
-                        code_template.put(opcode, buffer.toString());
-                        code_template_keys.add(opcode);
-                    } else {
-                        opcode = buffer.toString();
+                    // This is the block_collection_name
+                    block_collection_name = buffer.toString();
 
-                        data_index++;
-                    }
-
+                    // Clear the buffer
                     buffer = new StringBuilder();
-
                 } else {
                     buffer.append(c);
                 }
@@ -537,8 +543,8 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
             } else if (current_mode == ParseCodeMode.BLOCK) {
                 if (c == 0x0) {
                     if (data_index == 1) {
-                        // This is the code template index
-                        template_index = Integer.parseInt(buffer.toString());
+                        // This is the opcode
+                        opcode = buffer.toString();
 
                         // Empty the buffer
                         buffer = new StringBuilder();
@@ -555,8 +561,35 @@ public class Whinstone implements OpenBlocksModule.ProjectParser {
                     buffer.append(c);
                 }
             }
+
+            else if (current_mode == ParseCodeMode.BLOCK_COLOR) {
+                if (color_counter != 3) {
+                    switch (color_counter) {
+                        case 0:
+                            color_red = c;
+                            break;
+
+                        case 1:
+                            color_green = c;
+                            break;
+
+                        case 2:
+                            color_blue = c;
+
+                            // Finished parsing color, now parse the block
+                            // (god i should've made this consistent)
+                            current_mode = ParseCodeMode.BLOCK;
+                            break;
+
+                        default:
+                            break;
+                    }
+
+                    color_counter++;
+                }
+            }
         }
 
-        return new OpenBlocksCode(code_template, blocks);
+        return new OpenBlocksCode(block_collection_name, blocks);
     }
 }
