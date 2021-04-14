@@ -2,8 +2,6 @@ package com.openblocks.module.whinstone;
 
 import android.content.Context;
 
-import androidx.annotation.NonNull;
-
 import com.openblocks.moduleinterface.OpenBlocksModule;
 import com.openblocks.moduleinterface.callbacks.Logger;
 import com.openblocks.moduleinterface.exceptions.ParseException;
